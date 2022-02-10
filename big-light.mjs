@@ -23,22 +23,6 @@ var DP = 20,          // 0 to MAX_DP
   // The maximum value of DP and Big.DP.
   MAX_DP = 1E6,       // 0 to 1000000
 
-  // The maximum magnitude of the exponent argument to the pow method.
-  MAX_POWER = 1E6,    // 1 to 1000000
-
-  /*
-   * The negative exponent (NE) at and beneath which toString returns exponential notation.
-   * (JavaScript numbers: -7)
-   * -1000000 is the minimum recommended exponent value of a Big.
-   */
-  NE = -7,            // 0 to -1000000
-
-  /*
-   * The positive exponent (PE) at and above which toString returns exponential notation.
-   * (JavaScript numbers: 21)
-   * 1000000 is the maximum recommended exponent value of a Big, but this limit is not enforced.
-   */
-  PE = 21,            // 0 to 1000000
 
   /*
    * When true, an error will be thrown if a primitive number is passed to the Big constructor,
@@ -67,6 +51,7 @@ var DP = 20,          // 0 to MAX_DP
 /*
  * Create and return a Big constructor.
  */
+// 返回一个构造函数
 function _Big_() {
 
   /*
@@ -76,6 +61,7 @@ function _Big_() {
    * n {number|string|Big} A numeric value.
    */
   function Big(n) {
+    // n = 0.0031415
     var x = this;
 
     // Enable constructor usage without new.
@@ -84,8 +70,8 @@ function _Big_() {
     // Duplicate.
     if (n instanceof Big) {
       x.s = n.s;
-      x.e = n.e;
-      x.c = n.c.slice();
+      x.e = n.e; // *10的几次方
+      x.c = n.c.slice(); // [3, 0, 1, 5]   
     } else {
       if (typeof n !== 'string') {
         if (Big.strict === true) {
@@ -93,6 +79,7 @@ function _Big_() {
         }
 
         // Minus zero?
+        // 转字符串
         n = n === 0 && 1 / n < 0 ? '-0' : String(n);
       }
 
@@ -104,16 +91,11 @@ function _Big_() {
     x.constructor = Big;
   }
 
+  // 原型上挂载计算方法，add...e.g
   Big.prototype = P;
   Big.DP = DP;
   Big.RM = RM;
-  Big.NE = NE;
-  Big.PE = PE;
   Big.strict = STRICT;
-  Big.roundDown = 0;
-  Big.roundHalfUp = 1;
-  Big.roundHalfEven = 2;
-  Big.roundUp = 3;
 
   return Big;
 }
@@ -126,6 +108,8 @@ function _Big_() {
  * n {number|string} A numeric value.
  */
 function parse(x, n) {
+  debugger
+  // n = '-0.00314'
   var e, i, nl;
 
   if (!NUMERIC.test(n)) {
@@ -133,12 +117,23 @@ function parse(x, n) {
   }
 
   // Determine sign.
+  // n去掉首位的负号
+  // s = 负数 ? -1 : 1 
   x.s = n.charAt(0) == '-' ? (n = n.slice(1), -1) : 1;
 
+  // n = '0.00314'
+  // s = -1
+
   // Decimal point?
+  // e = .的index
+  // 去掉小数点
   if ((e = n.indexOf('.')) > -1) n = n.replace('.', '');
 
+  // e = 1
+  // n = '000314'
+
   // Exponential form?
+  // 忽略指数型表示
   if ((i = n.search(/e/i)) > 0) {
 
     // Determine exponent.
@@ -146,16 +141,22 @@ function parse(x, n) {
     e += +n.slice(i + 1);
     n = n.substring(0, i);
   } else if (e < 0) {
+    // e小于0，表示n是整数
+    // e就是n的长度
 
     // Integer.
     e = n.length;
   }
 
   nl = n.length;
+  // nl = 6
 
   // Determine leading zeros.
   for (i = 0; i < nl && n.charAt(i) == '0';) ++i;
+  // 数一下n开头有几个0
+  // i = 3
 
+  // 0
   if (i == nl) {
 
     // Zero.
@@ -163,13 +164,29 @@ function parse(x, n) {
   } else {
 
     // Determine trailing zeros.
-    for (; nl > 0 && n.charAt(--nl) == '0';);
+    // n = '000314'
+    // nl = 6
+    for (; nl > 0 && n.charAt(--nl) == '0';); // nl变成去掉n尾部的长度， leading zeros included， trailing zeros excluded
+    // 如果n是0.00314
+    // 则e是1，i是3， nl是6
+    // x.e= -3
+    // 如果n是3140
+    // 则e是4， i是0， nl是3
+    // x.e = 2
     x.e = e - i - 1;
     x.c = [];
 
     // Convert string to array of digits without leading/trailing zeros.
+    // n的i的index开始，所以开头的0没有放进c数据中
     for (e = 0; i <= nl;) x.c[e++] = +n.charAt(i++);
   }
+
+  // // 数字-0.00314
+  // x = {
+  //   e: -3,
+  //   s: -1,
+  //   c: [3, 1, 4],
+  // }
 
   return x;
 }
@@ -247,26 +264,36 @@ function round(x, sd, rm, more) {
  * Return a string representing the value of Big x in normal or exponential notation.
  * Handles P.toExponential, P.toFixed, P.toJSON, P.toPrecision, P.toString and P.valueOf.
  */
+// doExponential 指数形式
 function stringify(x, doExponential, isNonzero) {
-  var e = x.e,
-    s = x.c.join(''),
-    n = s.length;
+  debugger
+  // // e.g
+  // x = {
+  //   e: -3,
+  //   c: [3, 0, 1, 5],
+  //   s: -1
+  // }
+  var e = x.e, // -3
+    s = x.c.join(''), // '3015'
+    n = s.length; // 4
 
-  // Exponential notation?
-  if (doExponential) {
-    s = s.charAt(0) + (n > 1 ? '.' + s.slice(1) : '') + (e < 0 ? 'e' : 'e+') + e;
+  // // Exponential notation?
+  // if (doExponential) {
+  //   s = s.charAt(0) + (n > 1 ? '.' + s.slice(1) : '') + (e < 0 ? 'e' : 'e+') + e;
 
   // Normal notation.
-  } else if (e < 0) {
+  // } else 
+  if (e < 0) { // 小数
+    debugger
     for (; ++e;) s = '0' + s;
-    s = '0.' + s;
-  } else if (e > 0) {
+    s = '0.' + s; // '0.00'
+  } else if (e > 0) { // 整数
     if (++e > n) {
       for (e -= n; e--;) s += '0';
     } else if (e < n) {
       s = s.slice(0, e) + '.' + s.slice(e);
     }
-  } else if (n > 1) {
+  } else if (n > 1) { // e == 0
     s = s.charAt(0) + '.' + s.slice(1);
   }
 
@@ -502,6 +529,7 @@ P.minus = P.sub = function (y) {
  * Return a new Big whose value is the value of this Big plus the value of Big y.
  */
 P.plus = P.add = function (y) {
+  debugger
   var e, k, t,
     x = this,
     Big = x.constructor;
@@ -559,7 +587,9 @@ P.plus = P.add = function (y) {
   e = yc.length;
 
   // Only start adding at yc.length - 1 as the further digits of xc can be left as they are.
-  for (k = 0; e; xc[e] %= 10) k = (xc[--e] = xc[e] + yc[e] + k) / 10 | 0;
+  for (k = 0; e; xc[e] %= 10) {
+    k = (xc[--e] = xc[e] + yc[e] + k) / 10 | 0;
+  }
 
   // No need to check for zero, as +x + +y != 0 && -x + -y != 0
 
@@ -671,7 +701,8 @@ P.times = P.mul = function (y) {
  * Return the value of this Big as a primitve number.
  */
 P.toNumber = function () {
-  var n = Number(stringify(this, true, true));
+  // var n = Number(stringify(this, true, true));
+  var n = Number(stringify(this, false, true));
   if (this.constructor.strict === true && !this.eq(n.toString())) {
     throw Error(NAME + 'Imprecise conversion');
   }
